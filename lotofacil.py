@@ -67,7 +67,7 @@ def is_prime(n):
     return True
 
 def validate_primes(combination):
-    return 5 <= sum(1 for num in combination if is_prime(num)) <= 6
+    return 4 <= sum(1 for num in combination if is_prime(num)) <= 7
 
 def validate_multi_of_three(combination):
     return 4 <= sum(1 for num in combination if num % 3 == 0) <= 6
