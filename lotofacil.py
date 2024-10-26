@@ -2,6 +2,7 @@ import os
 import itertools
 import random
 import requests
+import argparse
 from threading import Thread
 from time import sleep
 from termcolor import colored
@@ -137,6 +138,10 @@ def get_latest_game():
 dezenas: list[int] = {}
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--clean', action=argparse.BooleanOptionalAction)
+    args = parser.parse_args()
+
     ultimo_concurso = get_latest_game()
     data_apuracao = ultimo_concurso['dataApuracao']
     dezenas = [int(i) for i in ultimo_concurso['listaDezenas']]
@@ -161,7 +166,7 @@ if __name__ == "__main__":
 
         num = 1
         for combination in random.sample(valid_combinations, 20):
-           text = f"\rJogo {num}: {' - '.join(str(x) for x in combination)}"
+           text = f"\r{' '.join(str(x) for x in combination)}" if args.clean else f"\rJogo {num}: {' - '.join(str(x) for x in combination)}"
            if num % 2 == 0:
                print(text, flush=True, end="\n\n")
            else:
