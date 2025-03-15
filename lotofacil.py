@@ -3,9 +3,11 @@ import itertools
 import random
 import requests
 import argparse
+import pandas as pd
 from threading import Thread
 from time import sleep
 from termcolor import colored
+from datetime import date
 
 os.system('color')
 
@@ -44,7 +46,7 @@ class Loader:
 
     def stop(self):
         self.done = True
-        print(f"\r{self.end}", flush=True)
+        print(f"\r\n{self.end}", flush=True)
 
     def __exit__(self, exc_type, exc_value, tb):
         # handle exceptions with those variables ^
@@ -112,6 +114,36 @@ def validate_jumps(combination):
             return False
     return True
 
+def validate_edges(combination):
+    return (combination[0] in [1, 2] and combination[-1] in [24, 25])
+
+def validate_repeated_game(combination):
+    return combination not in sorteios
+
+def download_games():
+    url = "https://asloterias.com.br/download_excel.php"  # Exemplo, troque pela URL correta
+
+    payload = {
+        "l": "lf",  # Loteria: Lotofácil
+        "t": "t",   # Tipo do arquivo (tabela)
+        "o": "c",   # Ordenação (crescente)
+        "f1": "",   # Filtros opcionais (exemplo: data inicial)
+        "f2": ""    # Filtros opcionais (exemplo: data final)
+    }
+
+    # Nome do arquivo para salvar
+    file_contests = "sorteios_lotofacil.xlsx"
+
+    # Fazer o download do arquivo
+    response = requests.post(url, data=payload)
+    if response.status_code == 200:
+        with open(file_contests, "wb") as f:
+            f.write(response.content)
+        print("✅ Arquivo baixado com sucesso!")
+    else:
+        print("❌ Erro ao baixar o arquivo.")
+
+
 def has_duplicates(combination):
     return len(combination) != len(set(combination))
 
@@ -128,6 +160,8 @@ def generate_number_combinations():
     number_combinations = filter(validate_consecutive_numbers, number_combinations)
     number_combinations = filter(validate_rows_columns, number_combinations)
     number_combinations = filter(validate_jumps, number_combinations)
+    number_combinations = filter(validate_edges, number_combinations)
+    number_combinations = filter(validate_repeated_game, number_combinations)
 
     return number_combinations
 
@@ -139,36 +173,54 @@ dezenas: list[int] = {}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--clean', action=argparse.BooleanOptionalAction)
+    parser.add_argument('-c', '--count')
+    parser.add_argument('-m', '--manual', action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
 
-    ultimo_concurso = get_latest_game()
-    data_apuracao = ultimo_concurso['dataApuracao']
-    dezenas = [int(i) for i in ultimo_concurso['listaDezenas']]
+    today = date.today().strftime("%Y%m%d")
 
-    print(colored(f"Data: {data_apuracao}   Dezenas: {dezenas}\n", "black", "on_blue"))
+    file_path = os.path.expanduser(f'~/Documents/lotofacil/jogos_{today}.txt')
 
-    # while True:
-    #     try:
-    #         latest_game = sorted([int(item) for item in input("Dezenas do último sorteio : ").split()])
-    #         if len(latest_game) != 15 or has_duplicates(latest_game) or min(latest_game) < 1 or max(latest_game) > 25:
-    #             raise
-    #         else:
-    #             break
-    #     except Exception:
-    #         print("Jogo inválido!")
+    download_games()
+
+    df = pd.read_excel("sorteios_lotofacil.xlsx", skiprows=6)
+
+    df_dezenas = df.iloc[:, 2:18]  # Como pandas começa em 0, C=2 e Q=17
+
+    sorteios = [set(row) for row in df_dezenas.to_numpy()]
+
+    if args.manual:
+        while True:
+            try:
+                latest_game = sorted([int(item) for item in input("Dezenas do último sorteio : ").split()])
+                if len(latest_game) != 15 or has_duplicates(latest_game) or min(latest_game) < 1 or max(latest_game) > 25:
+                    raise
+                else:
+                    break
+            except Exception:
+                print("Jogo inválido!")
+            
+        dezenas = latest_game
+    else:
+        ultimo_concurso = get_latest_game()
+        data_apuracao = ultimo_concurso['dataApuracao']
+        proximo_concurso = ultimo_concurso['numeroConcursoProximo']
+        dezenas = [int(i) for i in ultimo_concurso['listaDezenas']]
+
+        print(colored(f"Data: {data_apuracao}   Dezenas: {dezenas}\n", "black", "on_blue"))
 
     with Loader():
         # Generate and print valid combinations
         valid_combinations = list(generate_number_combinations())
 
-        combinations = random.sample(valid_combinations, 20)
+        count = int(args.count) if args.count else 20
 
-        num = 1
-        for combination in random.sample(valid_combinations, 20):
-           text = f"\r{' '.join(str(x) for x in combination)}" if args.clean else f"\rJogo {num}: {' - '.join(str(x) for x in combination)}"
-           if num % 2 == 0:
-               print(text, flush=True, end="\n\n")
-           else:
-               print(colored(text, "black", "on_white"), flush=True, end="\n\n")
-           num+=1
+        combinations = random.sample(valid_combinations, count)
+
+        with open(file_path, "a") as file:
+            for combination in combinations:
+                text = f"{' '.join(str(x) for x in combination)}\r\n"
+                file.write(text)
+                # print(text, flush=True, end="\n\n")
+        
+        os.startfile(file_path)
